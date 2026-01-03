@@ -1,0 +1,56 @@
+@startuml
+
+!theme carbon-gray
+!include <C4/C4_Container>
+!include ../../../doc/common/c4-custom-rel.iuml
+!include ../../../doc/common/theme.iuml
+
+' так сделано в изначальной схеме
+SHOW_PERSON_OUTLINE()
+
+title Диаграмма контейнеров C4 BionicPRO (обогащённая)
+header BionicPRO
+
+Person_Ext(buyer, "Покупатель протеза", "Заказывает и оплачивает протез")
+Person_Ext(pilot, "Пилот протеза", "Пользователь бионического протеза. С этого человека считываются данные.")
+Person(operator, "Оператор производства", "Сотрудник BionicPRO")
+Person(ml_engineer, "ML-инженер", "Сотрудник BionicPRO")
+
+System_Boundary(bionicpro_system, "BionicPRO") {
+    Container(shop, "Интернет-магазин", "Bitrix24", "Заказ и оплата протезов")
+    Container(crm, "CRM", "Bitrix24", "Управление заказами и клиентами")
+    Container(api, "API", "Java/Python/Kotlin", "Бэкенд-сервис для мобильного приложения")
+    Container(keycloak, "Keycloak", "IdP", "Обеспечивает SSO\n(OAuth 2.0 Code Grant)")
+    
+    ContainerDb(db, "База данных", "PostgreSQL", "Хранение всех данных (пользователи, настройки, телеметрия)")
+    ContainerDb(crm_db, "CRM DB", "Oracle/PostgreSQL", "База данных CRM-системы")
+}
+
+Container(mobile_app, "Приложение для донастройки протеза", "iOS, Android", "Позволяет пилоту самостоятельно донастраивать протез в процессе эксплуатации")
+Container(cli_tool, "cli tool", "Python", "Инструмент для выгрузки данных для ML")
+
+System(prosthesis, "Протез (чип ESP32)", "Программа на C++: чтение данных с датчиков, распознавание движений и их воспроизводство. Чтение команд из приложения и их воспроизводство, передача телеметрии")
+
+Rel_D(pilot, prosthesis, "Предоставление миосигналов", "Миодатчики")
+Rel_D(pilot, mobile_app, "Использует для настройки", "App UI")
+
+Rel_D(buyer, shop, "Выбор протеза, заказ, оплата", "HTTPS")
+Rel_D(shop, crm, "Передача данных о заказах", "API")
+Rel_U(operator, crm, "Управление заказами", "HTTPS")
+
+Rel_D(mobile_app, keycloak, "Аутентификация (SSO)", "OAuth2 Code Grant")
+Rel_L(shop, keycloak, "Аутентификация (SSO)", "OAuth2 Code Grant")
+
+Rel_L(mobile_app, prosthesis, "Управление протезом", "Bluetooth")
+Rel_D(mobile_app, api, "Запрос настроек", "REST/HTTPS")
+
+Rel_D(prosthesis, api, "Отправка телеметрии в реальном времени", "4G / HTTPS")
+
+Rel_D(api, db, "Чтение/запись данных", "SQL")
+Rel_D(keycloak, db, "Хранение учетных данных", "SQL")
+Rel_L(crm, crm_db, "Работа с данными", "SQL")
+
+Rel_U(ml_engineer, cli_tool, "Выгрузка данных для обучения", "CLI")
+Rel_U(cli_tool, db, "Запрос телеметрии", "SQL")
+
+@enduml

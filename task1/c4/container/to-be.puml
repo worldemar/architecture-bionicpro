@@ -1,0 +1,70 @@
+@startuml
+
+!theme carbon-gray
+!include <C4/C4_Container>
+!include ../../../doc/common/c4-custom-rel.iuml
+!include ../../../doc/common/theme.iuml
+
+' так сделано в изначальной схеме
+SHOW_PERSON_OUTLINE()
+
+title Диаграмма контейнеров C4 BionicPRO (целевая)
+header BionicPRO
+
+Person_Ext(buyer, "Покупатель протеза", "Заказывает и оплачивает протез")
+Person_Ext(pilot, "Пилот протеза", "Пользователь бионического протеза. С этого человека считываются данные.")
+Person(operator, "Оператор производства", "Сотрудник BionicPRO")
+Person(ml_engineer, "ML-инженер", "Сотрудник BionicPRO")
+
+System_Boundary(bionicpro_system, "BionicPRO") {
+    Container(shop, "Интернет-магазин", "Bitrix24", "Заказ и оплата протезов. Работает через BFF.")
+    Container(mobile_app_backend, "BFF (Mobile/Web)", "Java/Python/Kotlin", "Паттерн BFF: управляет сессиями, хранит токены в защищённом хранилище, взаимодействует с IdP по PKCE.")
+    
+    Container(crm, "CRM", "Bitrix24", "Управление заказами и клиентами")
+    Container(api, "API", "Java/Python/Kotlin", "Бэкенд-сервис бизнес-логики")
+    Container(keycloak, "Keycloak", "IdP", "Обеспечивает SSO, управляет федерацией пользователей и PKCE flow")
+    
+    ContainerDb(db, "База данных", "PostgreSQL", "Хранение технических данных и настроек")
+    ContainerDb(crm_db, "CRM DB", "Oracle/PostgreSQL", "База данных CRM-системы")
+}
+
+' Внешние источники данных пользователей в разных странах
+System_Ext(ldap_ru, "LDAP / Active Directory (Russia)", "Хранилище учётных записей (РФ)")
+System_Ext(ldap_int, "LDAP / External IdP (Global)", "Хранилища учётных записей в других странах")
+
+Container(mobile_app, "Приложение для донастройки протеза", "iOS, Android", "Взаимодействует с BFF через HttpOnly сессионные куки")
+Container(cli_tool, "cli tool", "Python", "Инструмент для выгрузки данных для ML")
+System(prosthesis, "Протез (чип ESP32)", "Программа на C++: чтение данных с датчиков, распознавание движений и их воспроизводство. Чтение команд из приложения и их воспроизводство, передача телеметрии")
+
+
+
+
+Rel_D(pilot, mobile_app, "Использует для настройки", "App UI")
+Rel_D(pilot, prosthesis, "Предоставление миосигналов", "Миодатчики")
+Rel_D(mobile_app, mobile_app_backend, "Запросы API + Аутентификация", "HTTPS (Secure Cookies)")
+
+Rel_L(mobile_app, prosthesis, "Управление протезом", "Bluetooth")
+Rel_D(prosthesis, api, "Отправка телеметрии в реальном времени", "4G / HTTPS")
+
+Rel_R(mobile_app_backend, api, "Вызов бизнес-логики", "mTLS / Internal API")
+
+Rel_D(buyer, shop, "Выбор протеза, заказ, оплата", "HTTPS")
+
+Rel_L(shop, mobile_app_backend, "Аутентификация", "HTTPS (Secure Cookies)")
+Rel_D(mobile_app_backend, keycloak, "OAuth2 + PKCE Flow", "HTTPS")
+
+Rel_D(keycloak, ldap_ru, "User Federation / Sync", "LDAP")
+Rel_D(keycloak, ldap_int, "Identity Brokering / Federation", "SAML/OIDC/LDAP")
+
+
+Rel_D(api, db, "Чтение/запись данных", "SQL")
+Rel_L(keycloak, db, "Хранение учетных данных", "SQL")
+
+Rel_D(shop, crm, "Передача данных о заказах", "API")
+Rel_U(operator, crm, "Управление заказами", "HTTPS")
+Rel_L(crm, crm_db, "Работа с данными", "SQL")
+
+Rel_U(cli_tool, db, "Запрос телеметрии", "SQL")
+Rel_U(ml_engineer, cli_tool, "Выгрузка данных для обучения", "CLI")
+
+@enduml

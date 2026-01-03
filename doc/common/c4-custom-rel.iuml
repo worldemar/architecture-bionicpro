@@ -1,0 +1,7 @@
+!include <C4/C4>
+
+' custom procedure, adding Arrow parameter to standard Rel
+' see https://github.com/plantuml-stdlib/C4-PlantUML/blob/3b05cdddd3503c193f90e3f70a3a87d972d4897f/C4.puml
+!procedure ARel($from, $to, $label, $arrow="-->>", $techn="", $descr="", $sprite="", $tags="", $link="")
+    $getRel($arrow, $from, $to, $label, $techn, $descr, $sprite, $tags, $link)
+!endprocedure

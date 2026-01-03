@@ -1,5 +1,3 @@
-version: '3.8'
-
 services:
   keycloak_db:
     image: postgres:14
@@ -11,6 +9,27 @@ services:
       - ./postgres-keycloak-data:/var/lib/postgresql/data
     ports:
       - "5433:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U keycloak_user -d keycloak_db"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  ldap:
+    image: osixia/openldap:1.5.0-amd64
+    environment:
+      - LDAP_ORGANISATION=BionicPRO
+      - LDAP_DOMAIN=example.com
+      - LDAP_ADMIN_PASSWORD=admin
+      - LDAP_TLS=false
+    ports:
+      - "389:389"
+    healthcheck:
+      test: ["CMD", "ldapsearch", "-x", "-H", "ldap://localhost", "-s", "base", "-b", ""]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
   keycloak:
     image: quay.io/keycloak/keycloak:21.1
     environment:
@@ -20,6 +39,10 @@ services:
       KC_DB_URL: jdbc:postgresql://keycloak_db:5432/keycloak_db
       KC_DB_USERNAME: keycloak_user
       KC_DB_PASSWORD: keycloak_password
+      KC_HOSTNAME: localhost
+      KC_HOSTNAME_STRICT: "false"
+      KC_HOSTNAME_STRICT_BACKCHANNEL: "false"
+      KC_HTTP_RELATIVE_PATH: /
     command: 
       - start-dev
       - --import-realm
@@ -28,7 +51,33 @@ services:
     ports:
       - "8080:8080"
     depends_on:
-      - keycloak_db
+      keycloak_db:
+        condition: service_healthy
+      ldap:
+        condition: service_healthy
+
+  backend:
+    build:
+      context: ./backend
+    environment:
+      KC_URL: http://keycloak:8080
+      KC_FRONTEND_URL: http://localhost:8080
+      KC_REDIRECT_URI: http://localhost:8000/auth/callback
+      KC_REALM: reports-realm
+      KC_CLIENT_ID: reports-frontend
+      KC_CLIENT_SECRET: "oNwoLQdvJAvRcL89SydqCWCe5ry1jMgq"
+      FRONTEND_URL: http://localhost:3000
+      SESSION_SECRET: very-secret-session-key
+      SECURE_COOKIES: "false"
+      CLICKHOUSE_HOST: clickhouse
+      CLICKHOUSE_USER: default
+      CLICKHOUSE_PASSWORD: clickhouse
+    ports:
+      - "8000:8000"
+    depends_on:
+      - keycloak
+      - clickhouse
+
   frontend:
     build:
       context: ./frontend
@@ -37,6 +86,108 @@ services:
       - "3000:3000"
     environment:
       REACT_APP_API_URL: http://localhost:8000
-      REACT_APP_KEYCLOAK_URL: http://localhost:8080
-      REACT_APP_KEYCLOAK_REALM: reports-realm
-      REACT_APP_KEYCLOAK_CLIENT_ID: reports-frontend
+    depends_on:
+      - backend
+
+  # --- Infrastructure for Task 2 ---
+
+  # Business DB (Telemetry)
+  business_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: business_db
+      POSTGRES_USER: business_user
+      POSTGRES_PASSWORD: business_password
+    volumes:
+      - ./task2/init-db/postgres-business.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5434:5432"
+
+  # CRM DB
+  crm_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: crm_db
+      POSTGRES_USER: crm_user
+      POSTGRES_PASSWORD: crm_password
+    volumes:
+      - ./task2/init-db/postgres-crm.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "5435:5432"
+
+  # OLAP DB
+  clickhouse:
+    image: clickhouse/clickhouse-server:latest
+    environment:
+      - CLICKHOUSE_USER=default
+      - CLICKHOUSE_PASSWORD=clickhouse
+    volumes:
+      - ./task2/init-db/clickhouse-init.sql:/docker-entrypoint-initdb.d/init.sql
+    ports:
+      - "8123:8123"
+      - "9000:9000"
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "localhost:8123/ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # Airflow Metadata DB
+  airflow_db:
+    image: postgres:14
+    environment:
+      POSTGRES_DB: airflow
+      POSTGRES_USER: airflow
+      POSTGRES_PASSWORD: airflow_password
+
+  airflow_webserver:
+    image: apache/airflow:2.7.1
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow_password@airflow_db/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW_CONN_CRM_DB_CONN=postgresql://crm_user:crm_password@crm_db:5432/crm_db
+      - AIRFLOW_CONN_BUSINESS_DB_CONN=postgresql://business_user:business_password@business_db:5432/business_db
+      - _PIP_ADDITIONAL_DEPENDENCIES=apache-airflow-providers-postgres pandas requests
+    volumes:
+      - ./task2/airflow/dags:/opt/airflow/dags
+    ports:
+      - "8081:8080"
+    command: webserver
+    depends_on:
+      airflow_init:
+        condition: service_completed_successfully
+
+  airflow_scheduler:
+    image: apache/airflow:2.7.1
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow_password@airflow_db/airflow
+      - AIRFLOW__CORE__LOAD_EXAMPLES=False
+      - AIRFLOW_CONN_CRM_DB_CONN=postgresql://crm_user:crm_password@crm_db:5432/crm_db
+      - AIRFLOW_CONN_BUSINESS_DB_CONN=postgresql://business_user:business_password@business_db:5432/business_db
+      - _PIP_ADDITIONAL_DEPENDENCIES=apache-airflow-providers-postgres pandas requests
+    volumes:
+      - ./task2/airflow/dags:/opt/airflow/dags
+    command: scheduler
+    depends_on:
+      airflow_init:
+        condition: service_completed_successfully
+
+  airflow_init:
+    image: apache/airflow:2.7.1
+    environment:
+      - AIRFLOW__CORE__EXECUTOR=LocalExecutor
+      - AIRFLOW__DATABASE__SQL_ALCHEMY_CONN=postgresql+psycopg2://airflow:airflow_password@airflow_db/airflow
+    command: >
+      bash -c "airflow db upgrade &&
+      airflow users create
+      --username admin
+      --password admin
+      --firstname Airflow
+      --lastname Admin
+      --role Admin
+      --email admin@example.com"
+    depends_on:
+      airflow_db:
+        condition: service_started

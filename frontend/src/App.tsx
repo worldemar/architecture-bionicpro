@@ -1,23 +1,44 @@
-import React from 'react';
-import { ReactKeycloakProvider } from '@react-keycloak/web';
-import Keycloak, { KeycloakConfig } from 'keycloak-js';
+import React, { useEffect, useState } from 'react';
 import ReportPage from './components/ReportPage';
 
-const keycloakConfig: KeycloakConfig = {
-  url: process.env.REACT_APP_KEYCLOAK_URL,
-  realm: process.env.REACT_APP_KEYCLOAK_REALM||"",
-  clientId: process.env.REACT_APP_KEYCLOAK_CLIENT_ID||""
-};
-
-const keycloak = new Keycloak(keycloakConfig);
-
 const App: React.FC = () => {
+  const [authState, setAuthState] = useState<{
+    initialized: boolean;
+    authenticated: boolean;
+    user: any;
+  }>({
+    initialized: false,
+    authenticated: false,
+    user: null,
+  });
+
+  useEffect(() => {
+    // Проверяем статус аутентификации через BFF
+    fetch(`${process.env.REACT_APP_API_URL}/auth/me`, {
+      headers: { 'Accept': 'application/json' },
+      credentials: 'include',
+    })
+      .then(res => res.json())
+      .then(data => {
+        setAuthState({
+          initialized: true,
+          authenticated: data.authenticated,
+          user: data.user,
+        });
+      })
+      .catch(() => {
+        setAuthState(prev => ({ ...prev, initialized: true }));
+      });
+  }, []);
+
+  if (!authState.initialized) {
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+
   return (
-    <ReactKeycloakProvider authClient={keycloak}>
-      <div className="App">
-        <ReportPage />
-      </div>
-    </ReactKeycloakProvider>
+    <div className="App">
+      <ReportPage auth={authState} />
+    </div>
   );
 };
 
