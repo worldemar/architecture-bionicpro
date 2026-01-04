@@ -1,0 +1,50 @@
+@startuml
+
+!theme carbon-gray
+!include <C4/C4_Container>
+!include ../../../doc/common/c4-custom-rel.iuml
+!include ../../../doc/common/theme.iuml
+
+' так сделано в изначальной схеме
+SHOW_PERSON_OUTLINE()
+
+title Диаграмма контейнеров C4 BionicPRO (как-есть)
+header BionicPRO
+
+Person_Ext(buyer, "Покупатель протеза", "")
+Person_Ext(pilot, "Пилот протеза", "С этого человека считываются данные")
+Person(operator, "Оператор производства", "")
+Person(ml_engineer, "ML-инженер", "")
+
+
+System_Boundary(bionicpro_system, "BionicPRO") {
+    Container(shop, "Интернет-магазин", "Битрикс24", "")
+    Container(crm, "CRM", "Битрикс24", "")
+    Container(api, "API", "e.g. SpringBoot, ElasticSearch, etc.", "")
+    ContainerDb(db, "База данных", "PostgreSQL", "")
+    ContainerDb(crm_db, "CRM DB", "e.g. Oracle Database 12", "")
+}
+
+Container(mobile_app, "Приложение для донастройки протеза", "iOD, Android", "")
+Container(cli_tool, "cli tool", "e.g. SpringBoot, ElasticSearch, etc.", "")
+
+System(prosthesis, "Программа в чипе протеза", "Чтение данных с датчиков, распознавание движений и их воспроизводство. Чтение команд из приложения и их воспроизводство, передача телеметрии")
+
+Rel_D(buyer, shop, "Выбор протеза, заказ, оплата")
+Rel_D(shop, crm, "")
+Rel_U(operator, crm, "")
+
+Rel_D(pilot, mobile_app, "")
+Rel_D(pilot, prosthesis, "Предоставление миосигналов")
+Rel_L(mobile_app, prosthesis, "Управление протезом")
+
+Rel_U(cli_tool, db, "")
+Rel_U(ml_engineer, cli_tool, "")
+
+Rel_D(mobile_app, api, "")
+Rel_D(prosthesis, api, "Отправка технической телеметрии")
+
+Rel_D(api, db, "")
+Rel_L(crm, crm_db, "")
+
+@enduml

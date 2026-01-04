@@ -1,6 +1,26 @@
 {
     "realm": "reports-realm",
     "enabled": true,
+    "userFederationProviders": [
+      {
+        "displayName": "ldap-provider",
+        "providerName": "ldap",
+        "config": {
+          "connectionUrl": "ldap://ldap:389",
+          "usersDn": "ou=People,dc=example,dc=com",
+          "bindDn": "cn=admin,dc=example,dc=com",
+          "bindCredential": "admin",
+          "vendor": "other",
+          "usernameLDAPAttribute": "uid",
+          "rdnLDAPAttribute": "uid",
+          "uuidLDAPAttribute": "uid",
+          "userObjectClasses": "inetOrgPerson, top",
+          "authType": "simple",
+          "editMode": "READ_ONLY",
+          "searchScope": "1"
+        }
+      }
+    ],
     "roles": {
       "realm": [
         {
@@ -12,13 +32,14 @@
           "description": "Administrator role"
         },
         {
-          "name": "prothetic_user",
-          "description": "Prothetic user role with report access"
+          "name": "prosthetic_user",
+          "description": "prosthetic user role with report access"
         }
       ]
     },
     "users": [
       {
+        "id": "123e4567-e89b-12d3-a456-426614174000",
         "username": "user1",
         "enabled": true,
         "email": "user1@example.com",
@@ -34,6 +55,7 @@
         "realmRoles": ["user"]
       },
       {
+        "id": "223e4567-e89b-12d3-a456-426614174000",
         "username": "user2",
         "enabled": true,
         "email": "user2@example.com",
@@ -64,59 +86,70 @@
         "realmRoles": ["administrator"]
       },
       {
-        "username": "prothetic1",
+        "username": "prosthetic1",
         "enabled": true,
-        "email": "prothetic1@example.com",
-        "firstName": "Prothetic",
+        "email": "prosthetic1@example.com",
+        "firstName": "prosthetic",
         "lastName": "One",
         "credentials": [
           {
             "type": "password",
-            "value": "prothetic123",
+            "value": "prosthetic123",
             "temporary": false
           }
         ],
-        "realmRoles": ["prothetic_user"]
+        "realmRoles": ["prosthetic_user"]
       },
       {
-        "username": "prothetic2",
+        "username": "prosthetic2",
         "enabled": true,
-        "email": "prothetic2@example.com",
-        "firstName": "Prothetic",
+        "email": "prosthetic2@example.com",
+        "firstName": "prosthetic",
         "lastName": "Two",
         "credentials": [
           {
             "type": "password",
-            "value": "prothetic123",
+            "value": "prosthetic123",
             "temporary": false
           }
         ],
-        "realmRoles": ["prothetic_user"]
+        "realmRoles": ["prosthetic_user"]
       },
       {
-        "username": "prothetic3",
+        "username": "prosthetic3",
         "enabled": true,
-        "email": "prothetic3@example.com",
-        "firstName": "Prothetic",
+        "email": "prosthetic3@example.com",
+        "firstName": "prosthetic",
         "lastName": "Three",
         "credentials": [
           {
             "type": "password",
-            "value": "prothetic123",
+            "value": "prosthetic123",
             "temporary": false
           }
         ],
-        "realmRoles": ["prothetic_user"]
+        "realmRoles": ["prosthetic_user"]
       }
     ],
     "clients": [
       {
         "clientId": "reports-frontend",
         "enabled": true,
-        "publicClient": true,
-        "redirectUris": ["http://localhost:3000/*"],
-        "webOrigins": ["http://localhost:3000"],
-        "directAccessGrantsEnabled": true
+        "publicClient": false,
+        "secret": "oNwoLQdvJAvRcL89SydqCWCe5ry1jMgq",
+        "redirectUris": [
+          "*"
+        ],
+        "webOrigins": [
+          "*"
+        ],
+        "standardFlowEnabled": true,
+        "directAccessGrantsEnabled": true,
+        "serviceAccountsEnabled": true,
+        "attributes": {
+          "pkce.code.challenge.method": "S256",
+          "post.logout.redirect.uris": "+"
+        }
       },
       {
         "clientId": "reports-api",
@@ -126,4 +159,4 @@
         "bearerOnly": true
       }
     ]
-  }
+}
